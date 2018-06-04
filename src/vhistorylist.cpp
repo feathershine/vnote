@@ -21,7 +21,7 @@ extern VNote *g_vnote;
 VHistoryList::VHistoryList(QWidget *p_parent)
     : QWidget(p_parent),
       m_initialized(false),
-      m_uiSetuped(false),
+      m_uiInitialized(false),
       m_updatePending(true),
       m_currentDate(QDate::currentDate())
 {
@@ -29,11 +29,11 @@ VHistoryList::VHistoryList(QWidget *p_parent)
 
 void VHistoryList::setupUI()
 {
-    if (m_uiSetuped) {
+    if (m_uiInitialized) {
         return;
     }
 
-    m_uiSetuped = true;
+    m_uiInitialized = true;
 
     m_clearBtn = new QPushButton(VIconUtils::buttonDangerIcon(":/resources/icons/clear_history.svg"), "");
     m_clearBtn->setToolTip(tr("Clear"));
@@ -144,7 +144,7 @@ void VHistoryList::pinFolder(const QString &p_folder)
 void VHistoryList::addFilesInternal(const QStringList &p_files, bool p_isPinned)
 {
     for (auto const & file : p_files) {
-        // Find it in existing enries.
+        // Find it in existing entries.
         bool pinnedBefore = false;
         auto it = findFileInHistory(file);
         if (it != m_histories.end()) {
@@ -183,11 +183,12 @@ void VHistoryList::init()
         return;
     }
 
+    m_initialized = true;
+
     setupUI();
 
     g_config->getHistory(m_histories);
 
-    m_initialized = true;
     m_updatePending = true;
 }
 
@@ -264,6 +265,7 @@ void VHistoryList::updateList()
         m_itemList->addItem(seps[i].m_item);
     }
 
+    QIcon noteIcon(VIconUtils::treeViewIcon(":/resources/icons/note_item.svg"));
     QIcon folderIcon(VIconUtils::treeViewIcon(":/resources/icons/dir_item.svg"));
     for (auto it = m_histories.cbegin(); it != m_histories.cend(); ++it) {
         QListWidgetItem *item = new QListWidgetItem(VUtils::fileNameFromPath(it->m_file));
@@ -272,6 +274,8 @@ void VHistoryList::updateList()
 
         if (it->m_isFolder) {
             item->setIcon(folderIcon);
+        } else {
+            item->setIcon(noteIcon);
         }
 
         if (it->m_isPinned) {

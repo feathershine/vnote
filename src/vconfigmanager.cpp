@@ -17,7 +17,7 @@ const QString VConfigManager::orgName = QString("vnote");
 
 const QString VConfigManager::appName = QString("vnote");
 
-const QString VConfigManager::c_version = QString("1.16");
+const QString VConfigManager::c_version = QString("1.17");
 
 const QString VConfigManager::c_obsoleteDirConfigFile = QString(".vnote.json");
 
@@ -51,6 +51,8 @@ const QString VConfigManager::c_exportFolderName = QString("vnote_exports");
 
 VConfigManager::VConfigManager(QObject *p_parent)
     : QObject(p_parent),
+      m_noteListViewOrder(-1),
+      m_explorerCurrentIndex(-1),
       m_hasReset(false),
       userSettings(NULL),
       defaultSettings(NULL),
@@ -127,6 +129,8 @@ void VConfigManager::initialize()
         m_webZoomFactor = VUtils::calculateScaleFactor();
         qDebug() << "set WebZoomFactor to" << m_webZoomFactor;
     }
+
+    m_editorZoomDelta = getConfigFromSettings("global", "editor_zoom_delta").toInt();
 
     m_enableCodeBlockHighlight = getConfigFromSettings("global",
                                                        "enable_code_block_highlight").toBool();
@@ -396,7 +400,7 @@ void VConfigManager::writeNotebookToSettings(QSettings *p_settings,
         p_settings->setArrayIndex(i);
         const VNotebook &notebook = *p_notebooks[i];
         p_settings->setValue("name", notebook.getName());
-        p_settings->setValue("path", notebook.getPath());
+        p_settings->setValue("path", notebook.getPathInConfig());
     }
 
     p_settings->endArray();
@@ -1217,7 +1221,7 @@ void VConfigManager::setLastOpenedFiles(const QVector<VFileSessionInfo> &p_files
     m_sessionSettings->endArray();
 }
 
-void VConfigManager::getHistory(QLinkedList<VHistoryEntry> &p_history)
+void VConfigManager::getHistory(QLinkedList<VHistoryEntry> &p_history) const
 {
     p_history.clear();
 
@@ -1248,6 +1252,45 @@ void VConfigManager::setHistory(const QLinkedList<VHistoryEntry> &p_history)
     for (auto it = p_history.begin(); it != p_history.end(); ++it, ++i) {
         m_sessionSettings->setArrayIndex(i);
         it->toSettings(m_sessionSettings);
+    }
+
+    m_sessionSettings->endArray();
+}
+
+void VConfigManager::getExplorerEntries(QVector<VExplorerEntry> &p_entries) const
+{
+    p_entries.clear();
+
+    int size = m_sessionSettings->beginReadArray("explorer_starred");
+    for (int i = 0; i < size; ++i) {
+        m_sessionSettings->setArrayIndex(i);
+        p_entries.append(VExplorerEntry::fromSettings(m_sessionSettings));
+    }
+
+    m_sessionSettings->endArray();
+}
+
+void VConfigManager::setExplorerEntries(const QVector<VExplorerEntry> &p_entries)
+{
+    if (m_hasReset) {
+        return;
+    }
+
+    const QString section("explorer_starred");
+
+    // Clear it first
+    m_sessionSettings->beginGroup(section);
+    m_sessionSettings->remove("");
+    m_sessionSettings->endGroup();
+
+    m_sessionSettings->beginWriteArray(section);
+    int idx = 0;
+    for (auto const & entry : p_entries) {
+        if (entry.m_isStarred) {
+            m_sessionSettings->setArrayIndex(idx);
+            entry.toSettings(m_sessionSettings);
+            ++idx;
+        }
     }
 
     m_sessionSettings->endArray();

@@ -15,7 +15,6 @@
 #include "vnavigationmode.h"
 #include "vlistwidget.h"
 
-class QAction;
 class VNote;
 class QListWidget;
 class QPushButton;
@@ -120,6 +119,19 @@ protected:
     void focusInEvent(QFocusEvent *p_event) Q_DECL_OVERRIDE;
 
 private:
+    // Should be aligned with note_list_view_order in vnote.ini.
+    enum ViewOrder
+    {
+        Config = 0,
+        Name,
+        NameReverse,
+        CreatedTime,
+        CreatedTimeReverse,
+        ModifiedTime,
+        ModifiedTimeReverse,
+        Max
+    };
+
     void setupUI();
 
     // Init shortcuts.
@@ -136,9 +148,6 @@ private:
     // Remove and delete item related to @p_file from list widget.
     void removeFileListItem(VNoteFile *p_file);
 
-    // Init actions.
-    void initActions();
-
     // Return the corresponding QListWidgetItem of @p_file.
     QListWidgetItem *findItem(const VNoteFile *p_file);
 
@@ -146,9 +155,6 @@ private:
     void pasteFiles(VDirectory *p_destDir,
                     const QVector<QString> &p_files,
                     bool p_isCut);
-
-    // New items have been added to direcotry. Update file list accordingly.
-    QVector<QListWidgetItem *> updateFileListAdded();
 
     inline QPointer<VNoteFile> getVFile(QListWidgetItem *p_item) const;
 
@@ -164,12 +170,21 @@ private:
     // Check if there are files in clipboard available to paste.
     bool pasteAvailable() const;
 
-    // Init Open With menu.
-    void initOpenWithMenu();
+    QMenu *getOpenWithMenu();
 
     void activateItem(QListWidgetItem *p_item, bool p_restoreFocus = false);
 
     void updateNumberLabel() const;
+
+    // Update the View menu.
+    void updateViewMenu(QMenu *p_menu);
+
+    // Sort file list.
+    void sortFileList(ViewOrder p_order);
+
+    void sortFiles(QVector<VNoteFile *> &p_files, ViewOrder p_order);
+
+    void selectFiles(const QVector<VNoteFile *> &p_files);
 
     VEditArea *editArea;
 
@@ -181,24 +196,6 @@ private:
 
     // Magic number for clipboard operations.
     int m_magicForClipboard;
-
-    // Actions
-    QAction *m_openInReadAct;
-    QAction *m_openInEditAct;
-    QAction *newFileAct;
-    QAction *deleteFileAct;
-    QAction *fileInfoAct;
-    QAction *copyAct;
-    QAction *cutAct;
-    QAction *pasteAct;
-
-    QAction *m_openLocationAct;
-
-    QAction *m_sortAct;
-
-    QAction *m_addToCartAct;
-
-    QAction *m_pinToHistoryAct;
 
     // Context sub-menu of Open With.
     QMenu *m_openWithMenu;

@@ -8,6 +8,8 @@
 #include <QMessageBox>
 #include <QUrl>
 #include <QDir>
+#include <functional>
+
 #include "vconfigmanager.h"
 #include "vconstants.h"
 
@@ -330,6 +332,23 @@ public:
 
     // Return QFormLayout.
     static QFormLayout *getFormLayout();
+
+    static bool inSameDrive(const QString &p_a, const QString &p_b);
+
+    static QString promptForFileName(const QString &p_title,
+                                     const QString &p_label,
+                                     const QString &p_default,
+                                     const QString &p_dir,
+                                     QWidget *p_parent = nullptr);
+
+    static QString promptForFileName(const QString &p_title,
+                                     const QString &p_label,
+                                     const QString &p_default,
+                                     std::function<bool(const QString &p_name)> p_checkExistsFunc,
+                                     QWidget *p_parent = nullptr);
+
+    // Whether @p_html has only <img> content.
+    static bool onlyHasImgInHtml(const QString &p_html);
 
     // Regular expression for image link.
     // ![image title]( http://github.com/tamlok/vnote.jpg "alt text" =200x100)

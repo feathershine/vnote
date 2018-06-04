@@ -46,6 +46,8 @@
 #include "vlistfolderue.h"
 #include "dialog/vfixnotebookdialog.h"
 #include "vhistorylist.h"
+#include "vexplorer.h"
+#include "vlistue.h"
 
 extern VConfigManager *g_config;
 
@@ -280,6 +282,11 @@ void VMainWindow::setupNaviBox()
     m_naviBox->addItem(m_historyList,
                        ":/resources/icons/history.svg",
                        tr("History"));
+
+    m_explorer = new VExplorer();
+    m_naviBox->addItem(m_explorer,
+                       ":/resources/icons/explorer.svg",
+                       tr("Explorer"));
 }
 
 void VMainWindow::setupNotebookPanel()
@@ -375,6 +382,14 @@ void VMainWindow::initViewToolBar(QSize p_iconSize)
                 }
             });
 
+    QAction *stayOnTopAct = new QAction(VIconUtils::toolButtonIcon(":/resources/icons/stay_on_top.svg"),
+                                        tr("Stay On Top"),
+                                        this);
+    stayOnTopAct->setStatusTip(tr("Toggle stay-on-top"));
+    stayOnTopAct->setCheckable(true);
+    connect(stayOnTopAct, &QAction::triggered,
+            this, &VMainWindow::stayOnTop);
+
     QAction *menuBarAct = new QAction(VIconUtils::toolButtonIcon(":/resources/icons/menubar.svg"),
                                       tr("Menu Bar"),
                                       this);
@@ -390,6 +405,7 @@ void VMainWindow::initViewToolBar(QSize p_iconSize)
     QMenu *viewMenu = new QMenu(this);
     viewMenu->setToolTipsVisible(true);
     viewMenu->addAction(fullScreenAct);
+    viewMenu->addAction(stayOnTopAct);
     viewMenu->addAction(menuBarAct);
 
     expandViewAct = new QAction(VIconUtils::toolButtonIcon(":/resources/icons/expand.svg"),
@@ -930,7 +946,11 @@ void VMainWindow::initFileMenu()
                 // Update lastPath
                 lastPath = QFileInfo(files[0]).path();
 
-                openFiles(VUtils::filterFilePathsToOpen(files));
+                openFiles(VUtils::filterFilePathsToOpen(files),
+                          false,
+                          g_config->getNoteOpenMode(),
+                          false,
+                          false);
             });
 
     fileMenu->addAction(openAct);
@@ -1282,8 +1302,7 @@ void VMainWindow::initToolsDock()
                        tr("Snippets"));
     m_toolBox->addItem(m_cart,
                        ":/resources/icons/cart.svg",
-                       tr("Cart"),
-                       m_cart->getContentWidget());
+                       tr("Cart"));
 
     m_toolDock->setWidget(m_toolBox);
     addDockWidget(Qt::RightDockWidgetArea, m_toolDock);
@@ -2131,6 +2150,7 @@ void VMainWindow::saveStateAndGeometry()
     g_config->setSearchDockChecked(m_searchDock->isVisible());
     g_config->setNotebookSplitterState(m_nbSplitter->saveState());
     g_config->setMainSplitterState(m_mainSplitter->saveState());
+    g_config->setNaviBoxCurrentIndex(m_naviBox->currentIndex());
 }
 
 void VMainWindow::restoreStateAndGeometry()
@@ -2157,6 +2177,8 @@ void VMainWindow::restoreStateAndGeometry()
     if (!nbSplitterState.isEmpty()) {
         m_nbSplitter->restoreState(nbSplitterState);
     }
+
+    m_naviBox->setCurrentIndex(g_config->getNaviBoxCurrentIndex());
 }
 
 void VMainWindow::handleCurrentDirectoryChanged(const VDirectory *p_dir)
@@ -2458,13 +2480,21 @@ bool VMainWindow::tryOpenInternalFile(const QString &p_filePath)
     return false;
 }
 
-void VMainWindow::openFiles(const QStringList &p_files,
-                            bool p_forceOrphan,
-                            OpenFileMode p_mode,
-                            bool p_forceMode,
-                            bool p_oneByOne)
+QVector<VFile *> VMainWindow::openFiles(const QStringList &p_files,
+                                        bool p_forceOrphan,
+                                        OpenFileMode p_mode,
+                                        bool p_forceMode,
+                                        bool p_oneByOne)
 {
+    QVector<VFile *> vfiles;
+    vfiles.reserve(p_files.size());
+
     for (int i = 0; i < p_files.size(); ++i) {
+        if (!QFileInfo::exists(p_files[i])) {
+            qWarning() << "file" << p_files[i] << "does not exist";
+            continue;
+        }
+
         VFile *file = NULL;
         if (!p_forceOrphan) {
             file = vnote->getInternalFile(p_files[i]);
@@ -2475,10 +2505,14 @@ void VMainWindow::openFiles(const QStringList &p_files,
         }
 
         m_editArea->openFile(file, p_mode, p_forceMode);
+        vfiles.append(file);
+
         if (p_oneByOne) {
             QCoreApplication::sendPostedEvents();
         }
     }
+
+    return vfiles;
 }
 
 void VMainWindow::editOrphanFileInfo(VFile *p_file)
@@ -2498,7 +2532,7 @@ void VMainWindow::checkSharedMemory()
     QStringList files = m_guard->fetchFilesToOpen();
     if (!files.isEmpty()) {
         qDebug() << "shared memory fetch files" << files;
-        openFiles(files);
+        openFiles(files, false, g_config->getNoteOpenMode(), false, false);
 
         // Eliminate the signal.
         m_guard->fetchAskedToShow();
@@ -2580,7 +2614,7 @@ void VMainWindow::openStartupPages()
     {
         QStringList pagesToOpen = VUtils::filterFilePathsToOpen(g_config->getStartupPages());
         qDebug() << "open startup pages" << pagesToOpen;
-        openFiles(pagesToOpen, false, OpenFileMode::Read, false, true);
+        openFiles(pagesToOpen, false, g_config->getNoteOpenMode(), false, true);
         break;
     }
 
@@ -3074,9 +3108,18 @@ void VMainWindow::initUniversalEntry()
 {
     m_ue = new VUniversalEntry(this);
     m_ue->hide();
+
+#if defined(Q_OS_MACOS) || defined(Q_OS_MAC)
+    // Qt::Popup on macOS does not work well with input method.
+    m_ue->setWindowFlags(Qt::Tool
+                         | Qt::NoDropShadowWindowHint);
+    m_ue->setWindowModality(Qt::ApplicationModal);
+#else
     m_ue->setWindowFlags(Qt::Popup
                          | Qt::FramelessWindowHint
                          | Qt::NoDropShadowWindowHint);
+#endif
+
     connect(m_ue, &VUniversalEntry::exited,
             this, [this]() {
                 m_captain->setCaptainModeEnabled(true);
@@ -3098,6 +3141,7 @@ void VMainWindow::initUniversalEntry()
     m_ue->registerEntry('h', searchUE, VSearchUE::Path_FolderNote_AllNotebook);
     m_ue->registerEntry('n', searchUE, VSearchUE::Path_FolderNote_CurrentNotebook);
     m_ue->registerEntry('m', new VListFolderUE(this), 0);
+    m_ue->registerEntry('j', new VListUE(this), VListUE::History);
     m_ue->registerEntry('?', new VHelpUE(this), 0);
 }
 
@@ -3150,7 +3194,7 @@ void VMainWindow::kickOffStartUpTimer(const QStringList &p_files)
         promptNewNotebookIfEmpty();
         QCoreApplication::sendPostedEvents();
         openStartupPages();
-        openFiles(p_files, false, OpenFileMode::Read, false, true);
+        openFiles(p_files, false, g_config->getNoteOpenMode(), false, true);
     });
 }
 
@@ -3158,4 +3202,21 @@ void VMainWindow::showNotebookPanel()
 {
     changePanelView(PanelViewState::VerticalMode);
     m_naviBox->setCurrentIndex(NAVI_BOX_NOTEBOOKS_IDX, false);
+}
+
+void VMainWindow::stayOnTop(bool p_enabled)
+{
+    bool shown = isVisible();
+    Qt::WindowFlags flags = this->windowFlags();
+
+    Qt::WindowFlags magicFlag = Qt::WindowStaysOnTopHint;
+    if (p_enabled) {
+        setWindowFlags(flags | magicFlag);
+    } else {
+        setWindowFlags(flags ^ magicFlag);
+    }
+
+    if (shown) {
+        show();
+    }
 }

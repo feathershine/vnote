@@ -27,6 +27,7 @@
 #include <QAction>
 #include <QTreeWidgetItem>
 #include <QFormLayout>
+#include <QInputDialog>
 
 #include "vorphanfile.h"
 #include "vnote.h"
@@ -793,6 +794,14 @@ QString VUtils::generateHtmlTemplate(const QString &p_template,
 
     extraFile += "<script>var VStylesToInline = '" + g_config->getStylesToInlineWhenCopied() + "';</script>\n";
 
+#if defined(Q_OS_MACOS) || defined(Q_OS_MAC)
+    extraFile += "<script>var VOS = 'mac';</script>\n";
+#elif defined(Q_OS_WIN)
+    extraFile += "<script>var VOS = 'win';</script>\n";
+#else
+    extraFile += "<script>var VOS = 'linux';</script>\n";
+#endif
+
     QString htmlTemplate(p_template);
     htmlTemplate.replace(HtmlHolder::c_JSHolder, jsFile);
     if (!extraFile.isEmpty()) {
@@ -1036,8 +1045,6 @@ bool VUtils::splitPathInBasePath(const QString &p_base,
     }
 
     p_parts = b.right(b.size() - a.size() - 1).split("/", QString::SkipEmptyParts);
-
-    qDebug() << QString("split path %1 based on %2 to %3 parts").arg(p_path).arg(p_base).arg(p_parts.size());
     return true;
 }
 
@@ -1526,4 +1533,100 @@ QFormLayout *VUtils::getFormLayout()
 #endif
 
     return layout;
+}
+
+bool VUtils::inSameDrive(const QString &p_a, const QString &p_b)
+{
+#if defined(Q_OS_WIN)
+    QChar sep(':');
+    int ai = p_a.indexOf(sep);
+    int bi = p_b.indexOf(sep);
+
+    if (ai == -1 || bi == -1) {
+        return false;
+    }
+
+    return p_a.left(ai).toLower() == p_b.left(bi).toLower();
+#else
+    return true;
+#endif
+}
+
+QString VUtils::promptForFileName(const QString &p_title,
+                                  const QString &p_label,
+                                  const QString &p_default,
+                                  const QString &p_dir,
+                                  QWidget *p_parent)
+{
+    QString name = p_default;
+    QString text = p_label;
+    QDir paDir(p_dir);
+    while (true) {
+        bool ok;
+        name = QInputDialog::getText(p_parent,
+                                     p_title,
+                                     text,
+                                     QLineEdit::Normal,
+                                     name,
+                                     &ok);
+        if (!ok || name.isEmpty()) {
+            return "";
+        }
+
+        if (!VUtils::checkFileNameLegal(name)) {
+            text = QObject::tr("Illegal name. Please try again:");
+            continue;
+        }
+
+        if (paDir.exists(name)) {
+            text = QObject::tr("Name already exists. Please try again:");
+            continue;
+        }
+
+        break;
+    }
+
+    return name;
+}
+
+QString VUtils::promptForFileName(const QString &p_title,
+                                  const QString &p_label,
+                                  const QString &p_default,
+                                  std::function<bool(const QString &p_name)> p_checkExistsFunc,
+                                  QWidget *p_parent)
+{
+    QString name = p_default;
+    QString text = p_label;
+    while (true) {
+        bool ok;
+        name = QInputDialog::getText(p_parent,
+                                     p_title,
+                                     text,
+                                     QLineEdit::Normal,
+                                     name,
+                                     &ok);
+        if (!ok || name.isEmpty()) {
+            return "";
+        }
+
+        if (!VUtils::checkFileNameLegal(name)) {
+            text = QObject::tr("Illegal name. Please try again:");
+            continue;
+        }
+
+        if (p_checkExistsFunc(name)) {
+            text = QObject::tr("Name already exists. Please try again:");
+            continue;
+        }
+
+        break;
+    }
+
+    return name;
+}
+
+bool VUtils::onlyHasImgInHtml(const QString &p_html)
+{
+    // Tricky.
+    return !p_html.contains("<p ");
 }

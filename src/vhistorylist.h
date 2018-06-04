@@ -23,6 +23,8 @@ public:
 
     void pinFolder(const QString &p_folder);
 
+    const QLinkedList<VHistoryEntry> &getHistoryEntries() const;
+
     // Implementations for VNavigationMode.
     void showNavigation() Q_DECL_OVERRIDE;
     bool handleKeyNavigation(int p_key, bool &p_succeed) Q_DECL_OVERRIDE;
@@ -80,7 +82,7 @@ private:
     // Whether data is loaded.
     bool m_initialized;
 
-    bool m_uiSetuped;
+    bool m_uiInitialized;
 
     // New files are appended to the end.
     QLinkedList<VHistoryEntry> m_histories;
@@ -91,4 +93,10 @@ private:
     QDate m_currentDate;
 };
 
+inline const QLinkedList<VHistoryEntry> &VHistoryList::getHistoryEntries() const
+{
+    const_cast<VHistoryList *>(this)->init();
+
+    return m_histories;
+}
 #endif // VHISTORYLIST_H

@@ -17,6 +17,7 @@
 #include "utils/vmetawordmanager.h"
 #include "markdownitoption.h"
 #include "vhistoryentry.h"
+#include "vexplorerentry.h"
 
 class QJsonObject;
 class QString;
@@ -131,6 +132,9 @@ public:
     int getCurNotebookIndex() const;
     void setCurNotebookIndex(int index);
 
+    int getNaviBoxCurrentIndex() const;
+    void setNaviBoxCurrentIndex(int p_index);
+
     // Read [notebooks] section from settings into @p_notebooks.
     void getNotebooks(QVector<VNotebook *> &p_notebooks, QObject *p_parent);
 
@@ -223,6 +227,9 @@ public:
     qreal getWebZoomFactor() const;
     void setWebZoomFactor(qreal p_factor);
     bool isCustomWebZoomFactor();
+
+    int getEditorZoomDelta() const;
+    void setEditorZoomDelta(int p_delta);
 
     const QString &getEditorCurrentLineBg() const;
 
@@ -359,11 +366,21 @@ public:
     void setLastOpenedFiles(const QVector<VFileSessionInfo> &p_files);
 
     // Read history from [history] of session.ini.
-    void getHistory(QLinkedList<VHistoryEntry> &p_history);
+    void getHistory(QLinkedList<VHistoryEntry> &p_history) const;
 
     void setHistory(const QLinkedList<VHistoryEntry> &p_history);
 
     int getHistorySize() const;
+
+    // Read explorer's starred entries from [explorer_starred] of session.ini.
+    void getExplorerEntries(QVector<VExplorerEntry> &p_entries) const;
+
+    // Output starred entries to [explorer_starred] of session.ini.
+    void setExplorerEntries(const QVector<VExplorerEntry> &p_entries);
+
+    int getExplorerCurrentIndex() const;
+
+    void setExplorerCurrentIndex(int p_idx);
 
     // Read custom magic words from [magic_words] section.
     QVector<VMagicWord> getCustomMagicWords();
@@ -489,6 +506,9 @@ public:
 
     const QString &getGraphvizDot() const;
     void setGraphvizDot(const QString &p_dotPath);
+
+    int getNoteListViewOrder() const;
+    void setNoteListViewOrder(int p_order);
 
 private:
     // Look up a config from user and default settings.
@@ -654,6 +674,9 @@ private:
 
     // Zoom factor of the QWebEngineView.
     qreal m_webZoomFactor;
+
+    // Editor zoom delta.
+    int m_editorZoomDelta;
 
     // Current line background color in editor.
     QString m_editorCurrentLineBg;
@@ -870,9 +893,6 @@ private:
     // Whether close note before open it via external editor.
     bool m_closeBeforeExternalEditor;
 
-    // Whether user has reset the configurations.
-    bool m_hasReset;
-
     // The string containing styles to inline when copied in edit mode.
     QString m_stylesToInlineWhenCopied;
 
@@ -895,6 +915,15 @@ private:
 
     // Size of history.
     int m_historySize;
+
+    // View order of note list.
+    int m_noteListViewOrder;
+
+    // Current entry index of explorer entries.
+    int m_explorerCurrentIndex;
+
+    // Whether user has reset the configurations.
+    bool m_hasReset;
 
     // The name of the config file in each directory, obsolete.
     // Use c_dirConfigFile instead.
@@ -996,6 +1025,16 @@ inline void VConfigManager::setCurNotebookIndex(int index)
 
     curNotebookIndex = index;
     setConfigToSessionSettings("global", "current_notebook", index);
+}
+
+inline int VConfigManager::getNaviBoxCurrentIndex() const
+{
+    return getConfigFromSessionSettings("global", "navibox_current_index").toInt();
+}
+
+inline void VConfigManager::setNaviBoxCurrentIndex(int p_index)
+{
+    setConfigToSessionSettings("global", "navibox_current_index", p_index);
 }
 
 inline void VConfigManager::getNotebooks(QVector<VNotebook *> &p_notebooks,
@@ -1414,6 +1453,21 @@ inline bool VConfigManager::isCustomWebZoomFactor()
     qreal factorFromIni = getConfigFromSettings("global", "web_zoom_factor").toReal();
     // -1 indicates let system automatically calculate the factor.
     return factorFromIni > 0;
+}
+
+inline int VConfigManager::getEditorZoomDelta() const
+{
+    return m_editorZoomDelta;
+}
+
+inline void VConfigManager::setEditorZoomDelta(int p_delta)
+{
+    if (m_editorZoomDelta == p_delta) {
+        return;
+    }
+
+    m_editorZoomDelta = p_delta;
+    setConfigToSettings("global", "editor_zoom_delta", m_editorZoomDelta);
 }
 
 inline const QString &VConfigManager::getEditorCurrentLineBg() const
@@ -2300,5 +2354,43 @@ inline void VConfigManager::setGraphvizDot(const QString &p_dotPath)
 inline int VConfigManager::getHistorySize() const
 {
     return m_historySize;
+}
+
+inline int VConfigManager::getNoteListViewOrder() const
+{
+    if (m_noteListViewOrder == -1) {
+        const_cast<VConfigManager *>(this)->m_noteListViewOrder = getConfigFromSettings("global", "note_list_view_order").toInt();
+    }
+
+    return m_noteListViewOrder;
+}
+
+inline void VConfigManager::setNoteListViewOrder(int p_order)
+{
+    if (m_noteListViewOrder == p_order) {
+        return;
+    }
+
+    m_noteListViewOrder = p_order;
+    setConfigToSettings("global", "note_list_view_order", m_noteListViewOrder);
+}
+
+inline int VConfigManager::getExplorerCurrentIndex() const
+{
+    if (m_explorerCurrentIndex == -1) {
+        const_cast<VConfigManager *>(this)->m_explorerCurrentIndex = getConfigFromSessionSettings("global", "explorer_current_entry").toInt();
+    }
+
+    return m_explorerCurrentIndex;
+}
+
+inline void VConfigManager::setExplorerCurrentIndex(int p_idx)
+{
+    if (p_idx == m_explorerCurrentIndex) {
+        return;
+    }
+
+    m_explorerCurrentIndex = p_idx;
+    setConfigToSessionSettings("global", "explorer_current_entry", m_explorerCurrentIndex);
 }
 #endif // VCONFIGMANAGER_H
